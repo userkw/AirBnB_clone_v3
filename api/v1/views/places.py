@@ -19,14 +19,13 @@ def places_search():
     """
     # Parse request JSON
     if not request.is_json:
-        abort(400, "Not a JSON")
+        abort(400, description="Not a JSON")
     search_params = request.get_json()
 
-    if not search_params:
-        # Return all Place objects if JSON body is empty
-        places = storage.all(Place).values()
-        return jsonify([place.to_dict() for place in places])
+    if not isinstance(search_params, dict):
+        abort(400, description="Not a JSON")
 
+    # Initialize places set
     places = set()
 
     # Handle states and cities
@@ -50,7 +49,7 @@ def places_search():
 
     if not state_ids and not city_ids:
         # If no state or city is provided, return all Place objects
-        places = storage.all(Place).values()
+        places = set(storage.all(Place).values())
 
     # Handle amenities filtering
     amenity_ids = search_params.get('amenities', [])
@@ -58,5 +57,7 @@ def places_search():
         amenity_ids = set(amenity_ids)
         places = {place for place in places if amenity_ids.issubset({amenity.id for amenity in place.amenities})}
 
-    # Return the list of Place objects
-    return jsonify([place.to_dict() for place in places])
+    # Convert the set of places to a list of dictionaries
+    place_list = [place.to_dict() for place in places]
+
+    return jsonify(place_list)

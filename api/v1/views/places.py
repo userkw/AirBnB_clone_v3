@@ -1,14 +1,15 @@
 #!/usr/bin/python3
 """
-View for Place objects that handles all default RESTful API actions
+New endpoint to retrieve Place objects depending on JSON in request body
 """
+
+from flask import jsonify, request, abort
 from models import storage
 from models.place import Place
 from models.state import State
 from models.city import City
 from models.amenity import Amenity
 from api.v1.views import app_views
-from flask import abort, jsonify, request
 
 @app_views.route('/places_search', methods=['POST'], strict_slashes=False)
 def places_search():
@@ -16,48 +17,46 @@ def places_search():
     Retrieves all Place objects depending on the JSON in the body
     of the request.
     """
-    try:
-        data = request.get_json()
-    except Exception:
-        abort(400, description="Not a JSON")
+    # Parse request JSON
+    if not request.is_json:
+        abort(400, "Not a JSON")
+    search_params = request.get_json()
 
-    if data is None:
-        abort(400, description="Not a JSON")
+    if not search_params:
+        # Return all Place objects if JSON body is empty
+        places = storage.all(Place).values()
+        return jsonify([place.to_dict() for place in places])
 
-    states = data.get('states', [])
-    cities = data.get('cities', [])
-    amenities = data.get('amenities', [])
+    places = set()
 
-    # Initialize a list to store the final places
-    all_places = []
+    # Handle states and cities
+    state_ids = search_params.get('states', [])
+    city_ids = search_params.get('cities', [])
 
-    if not states and not cities:
-        all_places = list(storage.all(Place).values())
-    else:
-        # Get all Place objects related to states
-        if states:
-            for state_id in states:
-                state = storage.get(State, state_id)
-                if state:
-                    for city in state.cities:
-                        all_places.extend(city.places)
+    if state_ids:
+        for state_id in state_ids:
+            state = storage.get(State, state_id)
+            if state:
+                for city in state.cities:
+                    for place in city.places:
+                        places.add(place)
 
-        # Get all Place objects related to cities
-        if cities:
-            for city_id in cities:
-                city = storage.get(City, city_id)
-                if city:
-                    all_places.extend(city.places)
+    if city_ids:
+        for city_id in city_ids:
+            city = storage.get(City, city_id)
+            if city:
+                for place in city.places:
+                    places.add(place)
 
-    # Remove duplicates
-    all_places = list(set(all_places))
+    if not state_ids and not city_ids:
+        # If no state or city is provided, return all Place objects
+        places = storage.all(Place).values()
 
-    # Filter places by amenities
-    if amenities:
-        amenity_objs = [storage.get(Amenity, amenity_id) for amenity_id in amenities]
-        all_places = [place for place in all_places if all(amenity in place.amenities for amenity in amenity_objs)]
+    # Handle amenities filtering
+    amenity_ids = search_params.get('amenities', [])
+    if amenity_ids:
+        amenity_ids = set(amenity_ids)
+        places = {place for place in places if amenity_ids.issubset({amenity.id for amenity in place.amenities})}
 
-    # Convert Place objects to list of dictionaries
-    result = [place.to_dict() for place in all_places]
-
-    return jsonify(result)
+    # Return the list of Place objects
+    return jsonify([place.to_dict() for place in places])

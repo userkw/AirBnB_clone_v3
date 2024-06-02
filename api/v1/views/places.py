@@ -9,7 +9,6 @@ from models.city import City
 from models.amenity import Amenity
 from api.v1.views import app_views
 from flask import abort, jsonify, request
-from sqlalchemy import and_
 
 @app_views.route('/places_search', methods=['POST'], strict_slashes=False)
 def places_search():
@@ -29,7 +28,7 @@ def places_search():
     all_places = []
 
     if not states and not cities:
-        all_places = storage.all(Place).values()
+        all_places = list(storage.all(Place).values())
     else:
         # Get all Place objects related to states
         if states:
@@ -45,6 +44,9 @@ def places_search():
                 city = storage.get(City, city_id)
                 if city and city not in all_places:
                     all_places.extend(city.places)
+
+    # Remove duplicates
+    all_places = list(set(all_places))
 
     # Filter places by amenities
     if amenities:

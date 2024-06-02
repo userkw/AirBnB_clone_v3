@@ -45,8 +45,8 @@ def delete_amenity(place_id, amenity_id):
 
     for amenity_obj in place_amenities:
         if amenity_obj.id == amenity_id:
-            amenity_obj.delete()
-            amenity_obj.save()
+            place_amenities.remove(amenity_obj)  # Remove the amenity
+            place.save()  # Save the updated Place
             return jsonify({}), 200  # Corrected status code to 200
     abort(404)  # Raise 404 if amenity not found
 
